@@ -1,4 +1,4 @@
-# Dual Image Sequence Registration
+# Image Sequence Registration Macros
 
-A FIJI based macro which attempts to register dual image sequences.
-Outputs 16 bit RGB48 TIF images.
+FIJI based macros which attempts to register image sequences.
+Outputs 16 bit TIF images.
