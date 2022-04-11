@@ -22,7 +22,7 @@ Dialog.addMessage("\n");
 Dialog.addNumber("Preserve frame numbers:",0);
 Dialog.addMessage("Preserve the input frame numbers instead of starting from zero.\nEnter the first frame number of your image sequence.\nOtherwise, leave at 0 to output frames beginning from 0.");
 Dialog.addNumber("Wait time between commands:",100);
-Dialog.addMessage("Add time in milliseconds between commands to allow the macro to execute properly."
+Dialog.addMessage("Add time in milliseconds between commands to allow the macro to execute properly.");
 Dialog.show();
 targetprefixtext=Dialog.getString();
 sourceprefixtext=Dialog.getString();
