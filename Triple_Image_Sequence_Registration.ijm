@@ -19,8 +19,6 @@ Dialog.addMessage("Increases the number of correspondences. 10 or more can start
 Dialog.addMessage("\n");
 Dialog.addNumber("Preserve frame numbers:",0);
 Dialog.addMessage("Preserve the input frame numbers instead of starting from zero.\nEnter the first frame number of your image sequence.\nOtherwise, leave at 0 to output frames beginning from 0.");
-Dialog.addCheckbox("Fast Registration using single Transform.",false);
-Dialog.addCheckbox("Run in headless mode. (It's a lot faster.)",true);
 Dialog.show();
 targetpath=Dialog.getString();
 source1path=Dialog.getString();
@@ -32,8 +30,6 @@ source2prefixtext=Dialog.getString();
 steps=toString(Dialog.getNumber());
 //steps=""+steps;
 preserveframes=Dialog.getNumber();
-fastreg=Dialog.getCheckbox();
-bmode=Dialog.getCheckbox();
 //targetpath = getDirectory("Select Target Input Directory");
 //source1path = getDirectory("Select Source 1 Input Directory (these files will be deformed to match the Target Files)");
 //source2path = getDirectory("Select Source 2 Input Directory (these files will be deformed to match the Target Files)");
@@ -302,8 +298,6 @@ for (j=0; j<targetlist.length && !donec; j++) {
 	}
 }
 
-if (bmode == false) {
-	setBatchMode(false);
 }
 
 //Start Registration from beginning of clip using initial transform found above as anchor if needed.
