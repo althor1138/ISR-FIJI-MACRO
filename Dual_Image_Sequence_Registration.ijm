@@ -1,921 +1,442 @@
-//Dual Image Sequence Registration
+//Triple Image Sequence Registration
 //16bit output
 
 Dialog.create("Register 16bit Image Sequences");
-Dialog.addMessage("Register Source to Target")
-Dialog.addString("Prefix text to Target Image Sequence:", "Target-");
-Dialog.addString("Prefix text to Source Image Sequence:", "Source-");
+Dialog.addMessage("Register Source to Target");
+Dialog.addMessage("Source will be conformed to the Target");
+Dialog.addMessage("\n");
+Dialog.addDirectory("Target Input Directory", "");
+Dialog.addDirectory("Source Input Directory", "");
+Dialog.addDirectory("Output Directory", "");
+Dialog.addMessage("\n");
+Dialog.addString("Prepend text to Target Image Sequence:", "Target-");
+Dialog.addString("Prepend text to Source Image Sequence:", "Source1-");
 Dialog.addMessage("\n");
 Dialog.addNumber("Steps Per Scale Octave:",6);
 Dialog.addMessage("Increases the number of correspondences. 10 or more can start to lose accuracy.");
 Dialog.addMessage("\n");
-Dialog.addNumber("Add Borders/Enlarge Canvas:",0);
-Dialog.addCheckbox("Enhance Contrast (Slower, but Feature Extraction is better)",false);
-Dialog.addCheckbox("Interactive Masking (Mask off areas that should not be Feature Matched)",false);
-Dialog.addCheckbox("Enable Colormatching", false);
-Dialog.addChoice("Colormatching Direction:", newArray("Source to Target", "Target to Source"), "Source to Target");
-Dialog.addMessage("Note: Colormatching is not performed on frames without correspondence or missing frames.");
-Dialog.addMessage("\n");
-Dialog.addCheckbox("Attempt To Replace Missing Frames",false);
-Dialog.addMessage("Missing frames must have a placeholder frame in place that is ENTIRELY black (RGB 0,0,0).\nIf Target AND Source are missing the same frame it will not be replaced.");
-Dialog.addMessage("\n");
 Dialog.addNumber("Preserve frame numbers:",0);
 Dialog.addMessage("Preserve the input frame numbers instead of starting from zero.\nEnter the first frame number of your image sequence.\nOtherwise, leave at 0 to output frames beginning from 0.");
-Dialog.addNumber("Wait time between commands:",100);
-Dialog.addMessage("Add time in milliseconds between commands to allow the macro to execute properly.");
 Dialog.show();
+targetpath=Dialog.getString();
+source1path=Dialog.getString();
+outputdir=Dialog.getString();
 targetprefixtext=Dialog.getString();
-sourceprefixtext=Dialog.getString();
-steps=Dialog.getNumber();
-steps=""+steps;
-addborders=Dialog.getNumber();
-CLAHE=Dialog.getCheckbox();
-mask=Dialog.getCheckbox();
-CM=Dialog.getCheckbox();
-CMD=Dialog.getChoice();
-RMF=Dialog.getCheckbox();
+source1prefixtext=Dialog.getString();
+steps=toString(Dialog.getNumber());
 preserveframes=Dialog.getNumber();
-waittime=Dialog.getNumber();
-if (CMD == "Source to Target") {
-Direction = "2";
-} else {
-Direction = "1";
-}
-targetpath = getDirectory("Select Target Input Directory");
-wait(waittime);
-sourcepath = getDirectory("Select Source Input Directory (these files will be deformed to match the Target Files)");
-wait(waittime);
-if (addborders > 0) {
-outputtargetdir=getDirectory("Select Target Output Directory for image sequence files:");
-wait(waittime);
-}
-outputsourcedir = getDirectory("Select Source Output Directory for image sequence files:");
-wait(waittime);
+File.makeDirectory(outputdir + "Target");
+File.makeDirectory(outputdir + "Source1");
+outputtargetdir=outputdir + "Target/"
+outputsourcedir=outputdir + "Source1/"
+
 targetlist = getFileList(targetpath);
-wait(waittime);
-sourcelist = getFileList(sourcepath);
-wait(waittime);
+source1list = getFileList(source1path);
 
-//Search for first frame that contains enough detail for a good transform.
+
+//Search for first frame that contains enough detail for masking.
 setBatchMode(true);
-wait(waittime);
+print("Searching for frame with enough information for masking.");
+var donem = false;//used to terminate loop
+for (k=0; k<targetlist.length && !donem; k++) {
+	targetnamem=targetprefixtext+pad(k+preserveframes);
+	source1namem=source1prefixtext+pad(k+preserveframes);
+	open(targetpath+targetlist[k]);
+	convertto16bit();
+   	rename(targetnamem);
+	open(source1path+source1list[k]);
+	convertto16bit();
+    rename(source1namem);
+	selectWindow(source1namem);
+	getStatistics(area1m,mean1m);
+	selectWindow(targetnamem);
+	getStatistics(area3m,mean3m);
+	selectWindow(source1namem);
+	setLocation(0,0,960,960);
+	if (mean1m > 8000) {
+		setBatchMode("show");
+		Dialog.create("Mask information");
+		Dialog.addMessage("Does the frame have enough information for masking?");
+		Dialog.addMessage("If so, check the checkbox and click OK.");
+		Dialog.addMessage("If not, leave the checkbox alone and click OK to try again.");
+		Dialog.addCheckbox("I'm ready to mask the frames.",false);
+		Dialog.show();
+		maskdetail=Dialog.getCheckbox();
+		if (maskdetail == true) {
+			setBatchMode("hide");
+			selectWindow(source1namem);
+			run("Select None");
+			setBatchMode("show");
+			setTool("rectangle");
+			waitForUser("Source1 Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue to the Target image.");
+			setBatchMode("hide");
+			source1masktype=selectionType;
+			if (source1masktype == 0) {
+				getSelectionBounds(sm1x,sm1y,sm1w,sm1h);
+			} else {
+				print("No source1 mask defined. Moving on.");
+			}
+			selectWindow(targetnamem);
+			run("Select None");
+			setBatchMode("show");
+			setTool("rectangle");
+			waitForUser("Target Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue with registration.");
+			setBatchMode("hide");
+			targetmasktype=selectionType;
+			if (targetmasktype == 0) {
+				getSelectionBounds(tmx,tmy,tmw,tmh);
+			} else {
+				print("No target mask defined. Moving on.");
+			}
+			close(source1namem);
+			close(targetnamem);
+			donem=true;
+		}
+	}
+	close(source1namem);
+	close(targetnamem);
+}		
+		
+
 print("Searching for initial set of correspondences");
-wait(waittime);
-var done = false; // used to terminate loop
-for (j=0; j<targetlist.length && !done; j++) {
-	wait(waittime);
+var donec = false; // used to terminate loop
+for (j=0; j<targetlist.length && !donec; j++) {
 	targetname=targetprefixtext+pad(j+preserveframes);
-	wait(waittime);
-	sourcename=sourceprefixtext+pad(j+preserveframes);
-	wait(waittime);
-	run("Bio-Formats Importer", "open=["+targetpath+targetlist[j]+"] color_mode=Composite open_files rois_import=[ROI manager] view=Hyperstack stack_order=XYCZT");
-	wait(waittime);
-     	convertto16bit();
-     	wait(waittime);
-	if (addborders > 0) {
-	twidth=addborders + getWidth();
-	wait(waittime);
-	theight=addborders + getHeight();
-	wait(waittime);
-	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
-	wait(waittime);
-	}
-	rename(targetname);
-	setLocation(0,0,320,240);
-	if (mask == true) {
-	wait(waittime);
-	run("Duplicate...", "title=targetmask");
-	setSlice(1);
-	setLocation(320,0,320,240);
-	}
-	wait(waittime);
-	run("Bio-Formats Importer", "open=["+sourcepath+sourcelist[j]+"] color_mode=Composite open_files rois_import=[ROI manager] view=Hyperstack stack_order=XYCZT");
-	wait(waittime);
-    	convertto16bit();
-    	wait(waittime);
-	rename(sourcename);
-	setLocation(0,240,320,240);
-	if (mask == true) {
-	wait(waittime);
-	run("Duplicate...", "title=sourcemask");
-	setSlice(1);
-	setLocation(320,240,320,240);
-	wait(waittime);
-	}
-	selectWindow(sourcename);
-	getStatistics(area,mean);
-	wait(waittime);
-	SIFT(sourcename,targetname,steps);
-	wait(waittime);
-    	selectWindow(sourcename);
-    	wait(waittime);
-	stype0=selectionType();
-	wait(waittime);
+	source1name=source1prefixtext+pad(j+preserveframes);
+	open(targetpath+targetlist[j]);
+	convertto16bit();
+   	rename(targetname);
+	open(source1path+source1list[j]);
+	convertto16bit();
+    rename(source1name);
+	selectWindow(source1name);
+	getStatistics(area1,mean1);
 	selectWindow(targetname);
-	wait(waittime);
-	stype1=selectionType();
-	wait(waittime);
-    if (stype0 & stype1 == 10 && mean > 3072) {
-    	wait(waittime);
-    	print("Correspondences Found.");
-    	wait(waittime);
-		selectWindow(sourcename);
-		wait(waittime);
-		Roi.getCoordinates(sc01x,sc01y);
-		wait(waittime);
+	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
+	selectWindow(source1name);
+	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
+	if (source1masktype == 0) {
+		selectWindow(source1name);
+		makeRectangle(sm1x,sm1y,sm1w,sm1h);
+		setColor("black");
+		fill();
+		run("Select None");
+	}
+	if (targetmasktype == 0) {
 		selectWindow(targetname);
-		wait(waittime);
-		Roi.getCoordinates(tc01x,tc01y);
-		wait(waittime);
-		close(sourcename);
-		wait(waittime);
-		close(targetname);
-		wait(waittime);
+		makeRectangle(tmx,tmy,tmw,tmh);
+		setColor("black");
+		fill();
+		run("Select None");
+	}
+	selectWindow(targetname);
+	twidth=1000 + getWidth();
+	theight=1000 + getHeight();
+	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
+	
+	SIFT(source1name,targetname,steps);
+	selectWindow(source1name);
+    s1type=selectionType();
+	selectWindow(targetname);
+	ttype1=selectionType();
+	if (s1type & ttype1 == 10 && mean1 > 3072) {
+		selectWindow(source1name);
+		Roi.getCoordinates(s1x,s1y);
+		selectWindow(targetname);
+		Roi.getCoordinates(t1x,t1y);
+	}
+	if (s1type & ttype1 == 10 && mean1 > 3072 ) {
 		print("Initial correspondences found");
-		wait(waittime);
-		done=true; //terminate the loop
+		selectWindow(source1name);
+		makeSelection("point hybrid yellow small",s1x,s1y);
+		selectWindow(targetname);
+		makeSelection("point hybrid yellow small",t1x,t1y);
+		selectWindow(source1name);
+		setSlice(1);
+		selectWindow(targetname);
+		setSlice(1);
+		run("Landmark Correspondences", "source_image=["+source1name+"] template_image=["+targetname+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+		setLocation(320,480,320,240);
+		rename("C1-"+source1name);
+		selectWindow(source1name);
+		setSlice(2);
+		selectWindow(targetname);
+		setSlice(2);
+		run("Landmark Correspondences", "source_image=["+source1name+"] template_image=["+targetname+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+		setLocation(640,480,320,240);
+		rename("C2-"+source1name);
+		selectWindow(source1name);
+		setSlice(3);
+		selectWindow(targetname);
+		setSlice(3);
+		run("Landmark Correspondences", "source_image=["+source1name+"] template_image=["+targetname+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+		setLocation(960,480,320,240);
+		rename("C3-"+source1name);
+		
+	while (isOpen("C1-" + source1name) != 1 && isOpen("C2-" + source1name) != 1 && isOpen("C3-" + source1name) != 1)
+		{ 
+			wait(100);
+		}
+	
+		close(source1name);
+		
+		run("Concatenate...", "  title=[" + source1name + "] image1=[" + "C1-" + source1name + "] image2=[" + "C2-" + source1name + "] image3=[" + "C3-" + source1name + "]");
+		setLocation(320,240,320,240);
+		run("Make Composite", "display=Composite");
+		setLocation(320,240,320,240);
+		PREPLABELS();
+		
+		run("Concatenate...", "  title=[Common Cropping] image1=[" + targetname + "] image2=[" + source1name + "] image3=[-- None --]");
+		run("Select None");
+		setBatchMode("show");
+		setLocation(0,0,960,960);
+		setTool("rectangle");
+		waitForUser("Common Cropping","Draw a rectangle around the area that should define the common active image area of all sources.\nUse the slider to check all 3 sources before continuing. \n Use Specify to fine tune the dimensions and location.");
+		run("Specify...");
+		setBatchMode("hide");
+		getSelectionBounds(ccx,ccy,ccw,cch);
+		close("Common Cropping");
+		donec=true; //terminate the loop
     } else {
-		wait(waittime);
-		close(sourcename);
-		wait(waittime);
+		close(source1name);
 		close(targetname);
-		wait(waittime);
-    }
+	}
 }
 
-//Interactive Masking
-if (mask == true) {
-wait(waittime);
-selectWindow("sourcemask");
-wait(waittime);
-run("Select None");
-wait(waittime);
-setBatchMode("show");
-wait(waittime);
-setTool("rectangle");
-wait(waittime);
-waitForUser("Source Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue to the Target image.");
-wait(waittime);
-setBatchMode("hide");
-wait(waittime);
-sourcemasktype=selectionType;
-wait(waittime);
-if (sourcemasktype == 0) {
-wait(waittime);
-getSelectionBounds(smx,smy,smw,smh);
-wait(waittime);
-} else {
-wait(waittime);
-print("No source mask defined. Moving on.");
-wait(waittime);
-}
-wait(waittime);
-selectWindow("targetmask");
-wait(waittime);
-run("Select None");
-wait(waittime);
-setBatchMode("show");
-wait(waittime);
-setTool("rectangle");
-wait(waittime);
-waitForUser("Target Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue with registration.");
-wait(waittime);
-setBatchMode("hide");
-wait(waittime);
-targetmasktype=selectionType;
-wait(waittime);
-if (targetmasktype == 0) {
-wait(waittime);
-getSelectionBounds(tmx,tmy,tmw,tmh);
-wait(waittime);
-} else {
-wait(waittime);
-print("No target mask defined. Moving on.");
-wait(waittime);
-}
-wait(waittime);
-close("sourcemask");
-wait(waittime);
-close("targetmask");
-wait(waittime);
-}
-wait(waittime);
-setBatchMode(false);
-wait(waittime);
 //Start Registration from beginning of clip using initial transform found above as anchor if needed.
 //Saves last known good set of correspondences and uses them on frames that have none.
-print("Registration loop initialized");
+print("Registration loop initialized.");
 for (i=0; i<targetlist.length; i++) {
 	showProgress(i+1, targetlist.length);
-	wait(waittime);
 	targetname1=targetprefixtext+pad(i+preserveframes);
-	wait(waittime);
-	sourcename1=sourceprefixtext+pad(i+preserveframes);
-	wait(waittime);
-	run("Bio-Formats Importer", "open=["+targetpath+targetlist[i]+"] color_mode=Composite open_files rois_import=[ROI manager] view=Hyperstack stack_order=XYCZT");
+	sourcename1=source1prefixtext+pad(i+preserveframes);
+	open(targetpath+targetlist[i]);
 	setLocation(0,0,320,240);
-	wait(waittime);
 	print("Import "+targetname1);
-	wait(waittime);
 	convertto16bit();
-	wait(waittime);
 	rename(targetname1);
-	wait(waittime);
-	if (addborders > 0) {
-	wait(waittime);
-	twidth=addborders + getWidth();
-	wait(waittime);
-	theight=addborders + getHeight();
-	wait(waittime);
-	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
 	setLocation(0,0,320,240);
-	wait(waittime);
-	run("Duplicate...", "title=["+targetname1+"] duplicate");
-	wait(waittime);
-	run("Split Channels");
-	wait(waittime);
-	selectWindow("C1-"+targetname1);
-	setLocation(320,0,320,240);
-	wait(waittime);
-	selectWindow("C2-"+targetname1);
-	setLocation(640,0,320,240);
-	wait(waittime);
-	selectWindow("C3-"+targetname1);
-	setLocation(960,0,320,240);
-	wait(waittime);
-	} else {
-	wait(waittime);
-	run("Duplicate...", "title=["+targetname1+"] duplicate");
-	wait(waittime);
-	run("Split Channels");
-	wait(waittime);
-	selectWindow("C1-"+targetname1);
-	setLocation(320,0,320,240);
-	wait(waittime);
-	selectWindow("C2-"+targetname1);
-	setLocation(640,0,320,240);
-	wait(waittime);
-	selectWindow("C3-"+targetname1);
-	setLocation(960,0,320,240);
-	wait(waittime);
-	}
-	wait(waittime);
-	run("Bio-Formats Importer", "open=["+sourcepath+sourcelist[i]+"] color_mode=Composite open_files rois_import=[ROI manager] view=Hyperstack stack_order=XYCZT");
+	rename(targetname1);
+	open(source1path+source1list[i]);
 	setLocation(0,240,320,240);
-	wait(waittime);
 	print("Import "+sourcename1);
-	wait(waittime);
-    	convertto16bit();
-    	wait(waittime);
-	rename(sourcename1);
-	wait(waittime);
-	run("Duplicate...", "title=["+sourcename1+"] duplicate");
-	wait(waittime);
-	run("Split Channels");
-	wait(waittime);
-	selectWindow("C1-"+sourcename1);
+	convertto16bit();
+    rename(sourcename1);
+	
+	print("Starting Elastic Registration");
+	selectWindow(targetname1);
+	run("Duplicate...", "title=T1-CLAHE");
+	setLocation(320,0,320,240);
+	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
+	selectWindow(sourcename1);
+	run("Duplicate...", "title=S1T-CLAHE");
 	setLocation(320,240,320,240);
-	wait(waittime);
-	selectWindow("C2-"+sourcename1);
-	setLocation(640,240,320,240);
-	wait(waittime);
-	selectWindow("C3-"+sourcename1);
-	setLocation(960,240,320,240);
-	wait(waittime);
-	if (CLAHE == true) {
-	wait(waittime);
-	selectWindow("C1-"+targetname1);
-	wait(waittime);
-	print("Enhance local contrast of "+targetname1+" Red channel");
-	wait(waittime);
 	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
-	wait(waittime);
-	selectWindow("C2-"+targetname1);
-	wait(waittime);
-	print("Enhance local contrast of "+targetname1+" Green channel");
-	wait(waittime);
-	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
-	wait(waittime);
-	selectWindow("C3-"+targetname1);
-	wait(waittime);
-	print("Enhance local contrast of "+targetname1+" Blue channel");
-	wait(waittime);
-	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
-	wait(waittime);
-	selectWindow("C1-"+sourcename1);
-	wait(waittime);
-	print("Enhance local contrast of "+sourcename1+" Red channel");
-	wait(waittime);
-	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
-	wait(waittime);
-	selectWindow("C2-"+sourcename1);
-	wait(waittime);
-	print("Enhance local contrast of "+sourcename1+" Green channel");
-	wait(waittime);
-	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
-	wait(waittime);
-	selectWindow("C3-"+sourcename1);
-	wait(waittime);
-	print("Enhance local contrast of "+sourcename1+" Blue channel");
-	wait(waittime);
-	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
-	wait(waittime);
+		
+	if (source1masktype == 0) {
+		selectWindow("S1T-CLAHE");
+		makeRectangle(sm1x,sm1y,sm1w,sm1h);
+		setColor("black");
+		fill();
+		run("Select None");
 	}
-	if (mask == true) {
-	 if (sourcemasktype == 0) {
-	  wait(waittime);
-	  selectWindow("C1-"+sourcename1);
-	  wait(waittime);
-	  makeRectangle(smx,smy,smw,smh);
-	  wait(waittime);
-	  setColor("black");
-	  wait(waittime);
-	  fill();
-	  wait(waittime);
-	  run("Select None");
-	  wait(waittime);
-	  selectWindow("C2-"+sourcename1);
-	  wait(waittime);
-	  makeRectangle(smx,smy,smw,smh);
-	  wait(waittime);
-	  setColor("black");
-	  wait(waittime);
-	  fill();
-	  wait(waittime);
-	  run("Select None");
-	  wait(waittime);
-	  selectWindow("C3-"+sourcename1);
-	  wait(waittime);
-	  makeRectangle(smx,smy,smw,smh);
-	  wait(waittime);
-	  setColor("black");
-	  wait(waittime);
-	  fill();
-	  wait(waittime);
-	  run("Select None");
-	  wait(waittime);
-	  }
-	 if (targetmasktype == 0) {
-	  wait(waittime);
-	  selectWindow("C1-"+targetname1);
-	  wait(waittime);
-	  makeRectangle(tmx,tmy,tmw,tmh);
-	  wait(waittime);
-	  setColor("black");
-	  wait(waittime);
-	  fill();
-	  wait(waittime);
-	  run("Select None");
-	  wait(waittime);
-	  selectWindow("C2-"+targetname1);
-	  wait(waittime);
-	  makeRectangle(tmx,tmy,tmw,tmh);
-	  wait(waittime);
-	  setColor("black");
-	  wait(waittime);
-	  fill();
-	  wait(waittime);
-	  run("Select None");
-	  wait(waittime);
-	  selectWindow("C3-"+targetname1);
-	  wait(waittime);
-	  makeRectangle(tmx,tmy,tmw,tmh);
-	  wait(waittime);
-	  setColor("black");
-	  wait(waittime);
-	  fill();
-	  wait(waittime);
-	  run("Select None");
-	  wait(waittime);
-	  }
-	 }
-	wait(waittime);
-	print("Starting Feature Extraction and Matching");
-	wait(waittime);
-	SIFT("C1-"+sourcename1,"C1-"+targetname1,steps);
-	wait(waittime);
-	SIFT("C2-"+sourcename1,"C2-"+targetname1,steps);
-	wait(waittime);
-	SIFT("C3-"+sourcename1,"C3-"+targetname1,steps);
-	wait(waittime);
-	selectWindow("C1-"+sourcename1);
-	wait(waittime);
-	stype2=selectionType();
-	wait(waittime);
-	selectWindow("C1-"+targetname1);
-	wait(waittime);
-	stype3=selectionType();
-	wait(waittime);
-	selectWindow("C2-"+sourcename1);
-	wait(waittime);
-	stype4=selectionType();
-	wait(waittime);
-	selectWindow("C2-"+targetname1);
-	wait(waittime);
-	stype5=selectionType();
-	wait(waittime);
-	selectWindow("C3-"+sourcename1);
-	wait(waittime);
-	stype6=selectionType();
-	wait(waittime);
-	selectWindow("C3-"+targetname1);
-	wait(waittime);
-	stype7=selectionType();
-	wait(waittime);
-	if (stype2==10 && stype3==10 && stype4==10 && stype5==10 && stype6==10 && stype7==10) {
-		wait(waittime);
-		selectWindow("C1-"+sourcename1);
-		wait(waittime);
-		Roi.getCoordinates(sc1x,sc1y);
-		wait(waittime);
-		selectWindow("C2-"+sourcename1);
-		wait(waittime);
-		Roi.getCoordinates(sc2x,sc2y);
-		wait(waittime);
-		selectWindow("C3-"+sourcename1);
-		wait(waittime);
-		Roi.getCoordinates(sc3x,sc3y);
-		wait(waittime);
-		selectWindow("C1-"+targetname1);
-		wait(waittime);
-		Roi.getCoordinates(tc1x,tc1y);
-		wait(waittime);
-		selectWindow("C2-"+targetname1);
-		wait(waittime);
-		Roi.getCoordinates(tc2x,tc2y);
-		wait(waittime);
-		selectWindow("C3-"+targetname1);
-		wait(waittime);
-		Roi.getCoordinates(tc3x,tc3y);
-		wait(waittime);
-		sx=Array.concat(sc1x,sc2x,sc3x);
-		wait(waittime);
-		sy=Array.concat(sc1y,sc2y,sc3y);
-		wait(waittime);
-		tx=Array.concat(tc1x,tc2x,tc3x);
-		wait(waittime);
-		ty=Array.concat(tc1y,tc2y,tc3y);
-		wait(waittime);
-		close("C1-"+sourcename1);
-		wait(waittime);
-		close("C2-"+sourcename1);
-		wait(waittime);
-		close("C3-"+sourcename1);
-		wait(waittime);
-		close("C1-"+targetname1);
-		wait(waittime);
-		close("C2-"+targetname1);
-		wait(waittime);
-		close("C3-"+targetname1);
-		wait(waittime);
-		selectWindow(sourcename1);
-		wait(waittime);
-		run("Split Channels");
-		wait(waittime);
-		selectWindow("C1-"+sourcename1);
-		setLocation(320,240,320,240);
-		wait(waittime);
-		selectWindow("C2-"+sourcename1);
-		setLocation(640,240,320,240);
-		wait(waittime);
-		selectWindow("C3-"+sourcename1);
-		setLocation(960,240,320,240);
-		wait(waittime);
+	if (targetmasktype == 0) {
+		selectWindow("T1-CLAHE");
+		makeRectangle(tmx,tmy,tmw,tmh);
+		setColor("black");
+		fill();
+		run("Select None");
+	}
+	selectWindow("T1-CLAHE");
+	twidth=1000 + getWidth();
+	theight=1000 + getHeight();
+	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
+	selectWindow(targetname1);
+	twidth=1000 + getWidth();
+	theight=1000 + getHeight();
+	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
+	selectWindow("S1T-CLAHE");
+	makeSelection("point hybrid yellow small",s1x,s1y);
+	selectWindow("T1-CLAHE");
+	makeSelection("point hybrid yellow small",t1x,t1y);
+	run("Landmark Correspondences", "source_image=S1T-CLAHE template_image=T1-CLAHE transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	rename("S1-CLAHE");
+	close("S1T-CLAHE");
+	SIFT("S1-CLAHE","T1-CLAHE",steps);
+	selectWindow("S1-CLAHE");
+	Roi.getCoordinates(ns1x,ns1y);
+	selectWindow("T1-CLAHE");
+	Roi.getCoordinates(nt1x,nt1y);
+	
+	close("S1-CLAHE");
+	selectWindow(sourcename1);
+	setSlice(1);
+	makeSelection("point hybrid yellow small",s1x,s1y);
+	selectWindow(targetname1);
+	setSlice(1);
+	makeSelection("point hybrid yellow small",t1x,t1y);
+	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	rename("C1T");
+	if (ns1x.length > 10) {
+		selectWindow("C1T");
+		makeSelection("point hybrid yellow small",ns1x,ns1y);
 		selectWindow(targetname1);
-		wait(waittime);
-		run("Split Channels");
-		wait(waittime);
-		selectWindow("C1-"+targetname1);
-		setLocation(320,0,320,240);
-		wait(waittime);
-		selectWindow("C2-"+targetname1);
-		setLocation(640,0,320,240);
-		wait(waittime);
-		selectWindow("C3-"+targetname1);
-		setLocation(960,0,320,240);
-		wait(waittime);
-		selectWindow("C1-"+sourcename1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",sx,sy);
-		wait(waittime);
-		selectWindow("C2-"+sourcename1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",sx,sy);
-		wait(waittime);
-		selectWindow("C3-"+sourcename1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",sx,sy);
-		wait(waittime);
-		selectWindow("C1-"+targetname1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",tx,ty);
-		wait(waittime);
-		selectWindow("C2-"+targetname1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",tx,ty);
-		wait(waittime);
-		selectWindow("C3-"+targetname1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",tx,ty);
-		wait(waittime);
-		print("Starting Elastic Registration");
-		wait(waittime);
-		run("bUnwarpJ", "source_image=["+"C1-"+sourcename1+"] target_image=["+"C1-"+targetname1+"] registration=Mono image_subsample_factor=0 initial_deformation=[Very Coarse] final_deformation=Fine divergence_weight=0 curl_weight=0 landmark_weight=1 image_weight=0 consistency_weight=0 stop_threshold=0.01");
-		wait(waittime);
-		close("C1-"+sourcename1);
-		wait(waittime);
-		selectWindow("Registered Source Image");
-		setLocation(320,240,320,240);
-		wait(waittime);
-		run("Slice Remover", "first=2 last=3 increment=1");
-		setLocation(320,240,320,240);
-		wait(waittime);
-		rename("C1-"+sourcename1);
-		wait(waittime);
-		convertto16bit();
-		wait(waittime);
-		run("bUnwarpJ", "source_image=["+"C2-"+sourcename1+"] target_image=["+"C2-"+targetname1+"] registration=Mono image_subsample_factor=0 initial_deformation=[Very Coarse] final_deformation=Fine divergence_weight=0 curl_weight=0 landmark_weight=1 image_weight=0 consistency_weight=0 stop_threshold=0.01");
-		wait(waittime);
-		close("C2-"+sourcename1);
-		wait(waittime);
-		selectWindow("Registered Source Image");
-		setLocation(640,240,320,240);
-		wait(waittime);
-		run("Slice Remover", "first=2 last=3 increment=1");
-		setLocation(640,240,320,240);
-		wait(waittime);
-		rename("C2-"+sourcename1);
-		wait(waittime);
-		convertto16bit();
-		wait(waittime);
-		run("bUnwarpJ", "source_image=["+"C3-"+sourcename1+"] target_image=["+"C3-"+targetname1+"] registration=Mono image_subsample_factor=0 initial_deformation=[Very Coarse] final_deformation=Fine divergence_weight=0 curl_weight=0 landmark_weight=1 image_weight=0 consistency_weight=0 stop_threshold=0.01");
-		wait(waittime);
-		close("C3-"+sourcename1);
-		wait(waittime);
-		selectWindow("Registered Source Image");
-		setLocation(960,240,320,240);
-		wait(waittime);
-		run("Slice Remover", "first=2 last=3 increment=1");
-		setLocation(960,240,320,240);
-		wait(waittime);
-		rename("C3-"+sourcename1);
-		wait(waittime);
-		convertto16bit();
-		wait(waittime);
-		if (CM == true) {
-		wait(waittime);
-		run("Concatenate...", "title=C1 open image1=["+"C1-"+sourcename1+"] image2=["+"C1-"+targetname1+"]");
-		wait(waittime);
-		run("Stack Histogram Match", "referenceslice=["+Direction+"]");
-		wait(waittime);
-		run("Remove Slice Labels");
-		wait(waittime);
-		run("Stack to Images");
-		wait(waittime);
-		selectWindow("C1-0001");
-		setLocation(320,240,320,240);
-		wait(waittime);
-		rename("C1-"+sourcename1);
-		wait(waittime);
-		selectWindow("C1-0002");
-		setLocation(320,0,320,240);
-		wait(waittime);
-		rename("C1-"+targetname1);
-		wait(waittime);
-		close("C1");
-		wait(waittime);
-		close("Histogram-matched-C1");
-		wait(waittime);
-		run("Concatenate...", "title=C2 open image1=["+"C2-"+sourcename1+"] image2=["+"C2-"+targetname1+"]");
-		wait(waittime);
-		run("Stack Histogram Match", "referenceslice=["+Direction+"]");
-		wait(waittime);
-		run("Remove Slice Labels");
-		wait(waittime);
-		run("Stack to Images");
-		wait(waittime);
-		selectWindow("C2-0001");
-		setLocation(640,240,320,240);
-		wait(waittime);
-		rename("C2-"+sourcename1);
-		wait(waittime);
-		selectWindow("C2-0002");
-		setLocation(640,0,320,240);
-		wait(waittime);
-		rename("C2-"+targetname1);
-		wait(waittime);
-		close("C2");
-		wait(waittime);
-		close("Histogram-matched-C2");
-		wait(waittime);
-		run("Concatenate...", "title=C3 open image1=["+"C3-"+sourcename1+"] image2=["+"C3-"+targetname1+"]");
-		wait(waittime);
-		run("Stack Histogram Match", "referenceslice=["+Direction+"]");
-		wait(waittime);
-		run("Remove Slice Labels");
-		wait(waittime);
-		run("Stack to Images");
-		wait(waittime);
-		selectWindow("C3-0001");
-		setLocation(960,240,320,240);
-		wait(waittime);
-		rename("C3-"+sourcename1);
-		wait(waittime);
-		selectWindow("C3-0002");
-		setLocation(960,0,320,240);
-		wait(waittime);
-		rename("C3-"+targetname1);
-		wait(waittime);
-		close("C3");
-		wait(waittime);
-		close("Histogram-matched-C3");
-		wait(waittime);
-		}
-		wait(waittime);
-		run("Concatenate...", "open image1=["+"C1-"+sourcename1+"] image2=["+"C2-"+sourcename1+"] image3=["+"C3-"+sourcename1+"]");
-		setLocation(1280,240,320,240);
-		wait(waittime);
-		run("Make Composite", "display=Composite");
-		setLocation(1280,240,320,240);
-		wait(waittime);
-		convertto16bit();
-		wait(waittime);
-		PREPLABELS();
-		wait(waittime);
-		saveAs("Tiff", outputsourcedir+sourcename1+".tif");
-		wait(waittime);
-		close(sourcename1+".tif");
-		wait(waittime);
-		if (addborders > 0) {
-		wait(waittime);
-		run("Concatenate...", "open image1=["+"C1-"+targetname1+"] image2=["+"C2-"+targetname1+"] image3=["+"C3-"+targetname1+"]");
-		setLocation(1280,0,320,240);
-		wait(waittime);
-		run("Make Composite", "display=Composite");
-		setLocation(1280,0,320,240);
-		wait(waittime);
-		convertto16bit();
-		wait(waittime);
-		PREPLABELS();
-		wait(waittime);
-		saveAs("Tiff", outputtargetdir+targetname1+".tif");
-		wait(waittime);
-		close(targetname1+".tif");
-		wait(waittime);
-		} else {
-		wait(waittime);
-		close("C1-"+targetname1);
-		wait(waittime);
-		close("C2-"+targetname1);
-		wait(waittime);
-		close("C3-"+targetname1);
-		wait(waittime);
-		}
-		} else {
-		wait(waittime);
-		close("C1-"+sourcename1);
-		wait(waittime);
-		close("C2-"+sourcename1);
-		wait(waittime);
-		close("C3-"+sourcename1);
-		wait(waittime);
-		close("C1-"+targetname1);
-		wait(waittime);
-		close("C2-"+targetname1);
-		wait(waittime);
-		close("C3-"+targetname1);
-		wait(waittime);
-		selectWindow(sourcename1);
-		wait(waittime);
-		smean=getValue("Mean");
-		wait(waittime);
-		run("Split Channels");
-		wait(waittime);
-		selectWindow("C1-"+sourcename1);
-		setLocation(320,240,320,240);
-		wait(waittime);
-		selectWindow("C2-"+sourcename1);
-		setLocation(640,240,320,240);
-		wait(waittime);
-		selectWindow("C3-"+sourcename1);
-		setLocation(960,240,320,240);
-		wait(waittime);
+		makeSelection("point hybrid yellow small",nt1x,nt1y);
+	} else {
+		selectWindow("C1T");
+		makeSelection("point hybrid yellow small",s1x,s1y);
 		selectWindow(targetname1);
-		wait(waittime);
-		tmean=getValue("Mean");
-		wait(waittime);
-		run("Split Channels");
-		wait(waittime);
-		selectWindow("C1-"+targetname1);
-		setLocation(320,0,320,240);
-		wait(waittime);
-		selectWindow("C2-"+targetname1);
-		setLocation(640,0,320,240);
-		wait(waittime);
-		selectWindow("C3-"+targetname1);
-		setLocation(960,0,320,240);
-		wait(waittime);
-		selectWindow("C1-"+sourcename1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",sc01x,sc01y);
-		wait(waittime);
-		selectWindow("C2-"+sourcename1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",sc01x,sc01y);
-		wait(waittime);
-		selectWindow("C3-"+sourcename1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",sc01x,sc01y);
-		wait(waittime);
-		selectWindow("C1-"+targetname1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",tc01x,tc01y);
-		wait(waittime);
-		selectWindow("C2-"+targetname1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",tc01x,tc01y);
-		wait(waittime);
-		selectWindow("C3-"+targetname1);
-		wait(waittime);
-		makeSelection("point hybrid yellow small",tc01x,tc01y);
-		wait(waittime);
-		print("Starting Elastic Registration");
-		wait(waittime);
-		run("bUnwarpJ", "source_image=["+"C1-"+sourcename1+"] target_image=["+"C1-"+targetname1+"] registration=Mono image_subsample_factor=0 initial_deformation=[Very Coarse] final_deformation=Fine divergence_weight=0 curl_weight=0 landmark_weight=1 image_weight=0 consistency_weight=0 stop_threshold=0.01");
-		wait(waittime);
-		close("C1-"+sourcename1);
-		wait(waittime);
-		selectWindow("Registered Source Image");
-		setLocation(320,240,320,240);
-		wait(waittime);
-		run("Slice Remover", "first=2 last=3 increment=1");
-		setLocation(320,240,320,240);
-		wait(waittime);
-		rename("C1-"+sourcename1);
-		wait(waittime);
-		convertto16bit();
-		wait(waittime);
-		run("bUnwarpJ", "source_image=["+"C2-"+sourcename1+"] target_image=["+"C2-"+targetname1+"] registration=Mono image_subsample_factor=0 initial_deformation=[Very Coarse] final_deformation=Fine divergence_weight=0 curl_weight=0 landmark_weight=1 image_weight=0 consistency_weight=0 stop_threshold=0.01");
-		wait(waittime);
-		close("C2-"+sourcename1);
-		wait(waittime);
-		selectWindow("Registered Source Image");
-		setLocation(640,240,320,240);
-		wait(waittime);
-		run("Slice Remover", "first=2 last=3 increment=1");
-		setLocation(640,240,320,240);
-		wait(waittime);
-		rename("C2-"+sourcename1);
-		wait(waittime);
-		convertto16bit();
-		wait(waittime);
-		run("bUnwarpJ", "source_image=["+"C3-"+sourcename1+"] target_image=["+"C3-"+targetname1+"] registration=Mono image_subsample_factor=0 initial_deformation=[Very Coarse] final_deformation=Fine divergence_weight=0 curl_weight=0 landmark_weight=1 image_weight=0 consistency_weight=0 stop_threshold=0.01");
-		wait(waittime);
-		close("C3-"+sourcename1);
-		wait(waittime);
-		selectWindow("Registered Source Image");
-		setLocation(960,240,320,240);
-		wait(waittime);
-		run("Slice Remover", "first=2 last=3 increment=1");
-		setLocation(960,240,320,240);
-		wait(waittime);
-		rename("C3-"+sourcename1);
-		wait(waittime);
-		convertto16bit();
-		wait(waittime);
-		if (RMF == true && (tmean > 0 && smean == 0)) {
-		wait(waittime);
-		close("C1-"+sourcename1);
-		wait(waittime);
-		close("C2-"+sourcename1);
-		wait(waittime);
-		close("C3-"+sourcename1);
-		wait(waittime);
-		run("Concatenate...", "open image1=["+"C1-"+targetname1+"] image2=["+"C2-"+targetname1+"] image3=["+"C3-"+targetname1+"]");
-		setLocation(1280,0,320,240);
-		wait(waittime);
-		run("Make Composite", "display=Composite");
-		setLocation(1280,0,320,240);
-		wait(waittime);
-		PREPLABELS();
-		wait(waittime);
-		if (addborders > 0) {
-		wait(waittime);
-		saveAs("Tiff", outputtargetdir+targetname1+".tif");
-		wait(waittime);
+		makeSelection("point hybrid yellow small",t1x,t1y);
+	}
+	run("Landmark Correspondences", "source_image=C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	setLocation(320,240,320,240);
+	rename("C1-"+sourcename1);
+	selectWindow(sourcename1);
+	setSlice(2);
+	makeSelection("point hybrid yellow small",s1x,s1y);
+	selectWindow(targetname1);
+	setSlice(2);
+	makeSelection("point hybrid yellow small",t1x,t1y);
+	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	rename("C2T");
+	if (ns1x.length > 10) {
+		selectWindow("C2T");
+		makeSelection("point hybrid yellow small",ns1x,ns1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",nt1x,nt1y);
+	} else {
+		selectWindow("C2T");
+		makeSelection("point hybrid yellow small",s1x,s1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",t1x,t1y);
+	}
+	run("Landmark Correspondences", "source_image=C2T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	setLocation(320,240,320,240);
+	rename("C2-"+sourcename1);
+	selectWindow(sourcename1);
+	setSlice(3);
+	makeSelection("point hybrid yellow small",s1x,s1y);
+	selectWindow(targetname1);
+	setSlice(3);
+	makeSelection("point hybrid yellow small",t1x,t1y);
+	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	rename("C3T");
+	if (ns1x.length > 10) {
+		selectWindow("C3T");
+		makeSelection("point hybrid yellow small",ns1x,ns1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",nt1x,nt1y);
+	} else {
+		selectWindow("C3T");
+		makeSelection("point hybrid yellow small",s1x,s1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",t1x,t1y);
+	}
+	run("Landmark Correspondences", "source_image=C3T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	setLocation(320,240,320,240);
+	rename("C3-"+sourcename1);
+		
+	while (isOpen("C1-" + sourcename1) != 1 && isOpen("C2-" + sourcename1) != 1 && isOpen("C3-" + sourcename1) != 1)
+		{ 
+			wait(100);
 		}
-		wait(waittime);
-		saveAs("Tiff", outputsourcedir+sourcename1+".tif");
-		wait(waittime);
-		close(sourcename1+".tif");
-		wait(waittime);
-		} else if ( RMF == true && (tmean == 0 && smean > 0)) {
-		wait(waittime);
-		run("Concatenate...", "open image1=["+"C1-"+sourcename1+"] image2=["+"C2-"+sourcename1+"] image3=["+"C3-"+sourcename1+"]");
-		setLocation(1280,240,320,240);
-		wait(waittime);
-		run("Make Composite", "display=Composite");
-		setLocation(1280,240,320,240);
-		wait(waittime);
-		PREPLABELS();
-		wait(waittime);
-		if (addborders > 0) {
-		wait(waittime);
-		saveAs("Tiff", outputtargetdir+targetname1+".tif");
-		wait(waittime);
-		}
-		wait(waittime);
-		saveAs("Tiff", outputsourcedir+sourcename1+".tif");
-		wait(waittime);
-		close(sourcename1+".tif");
-		wait(waittime);
-		close("C1-"+targetname1);
-		wait(waittime);
-		close("C2-"+targetname1);
-		wait(waittime);
-		close("C3-"+targetname1);
-		wait(waittime);
-		} else {
-		wait(waittime);
-		run("Concatenate...", "open image1=["+"C1-"+sourcename1+"] image2=["+"C2-"+sourcename1+"] image3=["+"C3-"+sourcename1+"]");
-		setLocation(1280,240,320,240);
-		wait(waittime);
-		run("Make Composite", "display=Composite");
-		setLocation(1280,240,320,240);
-		wait(waittime);
-		PREPLABELS();
-		wait(waittime);
-		saveAs("Tiff", outputsourcedir+sourcename1+".tif");
-		wait(waittime);
-		close(sourcename1+".tif");
-		wait(waittime);
-		if (addborders > 0) {
-		wait(waittime);
-		run("Concatenate...", "open image1=["+"C1-"+targetname1+"] image2=["+"C2-"+targetname1+"] image3=["+"C3-"+targetname1+"]");
-		setLocation(1280,0,320,240);
-		wait(waittime);
-		run("Make Composite", "display=Composite");
-		setLocation(1280,0,320,240);
-		wait(waittime);
-		PREPLABELS();
-		wait(waittime);
-		saveAs("Tiff", outputtargetdir+targetname1+".tif");
-		wait(waittime);
-		close(targetname1+".tif");
-		wait(waittime);
-		} else {
-		wait(waittime);
-		close("C1-"+targetname1);
-		wait(waittime);
-		close("C2-"+targetname1);
-		wait(waittime);
-		close("C3-"+targetname1);
-		wait(waittime);
-		}
-		}
+	
+	close(sourcename1);
+		
+	selectWindow(targetname1);
+	run("Select None");
+	makeRectangle(ccx,ccy,ccw,cch);
+	run("Crop");
+	setLocation(0,0,320,240);
+	PREPLABELS();
+	saveAs("Tiff", outputtargetdir+targetname1+".tiff");
+	wait(100);
+	close(targetname1);
+	close(targetname1+".tiff");
+	
+	run("Concatenate...", "  title=[" + sourcename1 + "] image1=[" + "C1-" + sourcename1 + "] image2=[" + "C2-" + sourcename1 + "] image3=[" + "C3-" + sourcename1 + "]");
+	setLocation(320,240,320,240);
+	run("Make Composite", "display=Composite");
+	run("Select None");
+	makeRectangle(ccx,ccy,ccw,cch);
+	run("Crop");
+	setLocation(320,240,320,240);
+	PREPLABELS();
+	saveAs("Tiff", outputsourcedir+sourcename1+".tiff");
+	wait(100);
+	close(sourcename1);
+	close(sourcename1+".tiff");
+	
+	print("\\Clear");
+	wait(100);
+	while (nImages()>0) {
+		selectImage(nImages());  
+		wait(100);
+		run("Close");
+	}
 }
+
 	print("\\Clear");
 	wait(500);
-	close("*");
-	wait(waittime);
-	call("java.lang.System.gc");
-	wait(waittime);
-	run("Collect Garbage");
-	wait(waittime);
 	while (nImages()>0) {
-            selectImage(nImages());  
-            wait(waittime);
-            run("Close");
+		selectImage(nImages());  
+		wait(100);
+		run("Close");
 	}
-}
+//File.makeDirectory(outputsourcedir + "CM");
+//wait(100);
+cms1t = File.open(outputdir + "python-" + source1prefixtext + targetprefixtext + ".txt");
+print(cms1t, "from color_matcher import ColorMatcher" + "\r"
++ "from color_matcher.io_handler import load_img_file, save_img_file, FILE_EXTS" + "\r"
++ "from color_matcher.normalizer import Normalizer" + "\r"
++ "import os" + "\r"
++ "\r"
++ "target_path = " + "r'" + outputtargetdir + "'" + "\r"
++ "source_path = " + "r'" + outputsourcedir + "'" + "\r"
++ "out_path = " + "r'" + outputsourcedir + "'" + "\r"
++ "target_filenames = os.listdir(target_path)" + "\r"
++ "source_filenames = os.listdir(source_path)" + "\r"
++ "\r"
++ "\r"
++ "cm = ColorMatcher()" + "\r"
++ "for i,j in zip(source_filenames,target_filenames):" + "\r"
++ "    img_source = load_img_file(source_path + str(i))" + "\r"
++ "    img_target = load_img_file(target_path + str(j))" + "\r"
++ "    img_res = cm.transfer(src=img_source, ref=img_target, method='hm-mvgd-hm')" + "\r"
++ "    img_res = Normalizer(img_res).uint16_norm()" + "\r"
++ "    save_img_file(img_res, os.path.join(out_path, str(i)))");
+File.close(cms1t);
 
-call("java.lang.System.gc");
-wait(waittime);
-beep();
-wait(waittime);
+avs = File.open(outputdir + "avs-" + source1prefixtext + targetprefixtext + ".txt");
+print(avs, "sfn="+ toString((0+preserveframes)) + "\r"
++ "efn=" + toString((targetlist.length+preserveframes-1)) + "\r"
++ "source1=imagesource(" + fromCharCode(34) + outputsourcedir + source1prefixtext  + "%06d.tiff" + fromCharCode(34) + ",start=sfn,end=efn,pixel_type=" + fromCharCode(34) + "RGB64" + fromCharCode(34) + ")" + "\r"
++ "target=imagesource(" + fromCharCode(34) + outputtargetdir + targetprefixtext +"%06d.tiff" + fromCharCode(34) + ",start=sfn,end=efn,pixel_type=" + fromCharCode(34) + "RGB64" + fromCharCode(34) + ")" + "\r"
++ "interleave(source1,target)" + "\r"
++ "return(last)");
+File.close(avs);
+
+wait(500);
+exec("cmd", "/c", "rename " + outputdir + "python-" + source1prefixtext + targetprefixtext + ".txt " + source1prefixtext + targetprefixtext + ".py");
+wait(500);
+exec("cmd", "/c", "rename " + outputdir + "avs-" + source1prefixtext + targetprefixtext + ".txt " + source1prefixtext + targetprefixtext + ".avs");
+wait(500);
+exec("cmd", "/c", outputdir + source1prefixtext + targetprefixtext + ".py");
 waitForUser("The registration macro is finished.");
 
-//function IMPORT() {
-//
-//}
 
 function SIFT(sourcename,targetname,steps) {
 run("Extract SIFT Correspondences", "source_image="+sourcename+" target_image="+targetname+" initial_gaussian_blur=1.60 steps_per_scale_octave="+steps+" minimum_image_size=64 maximum_image_size=1024 feature_descriptor_size=4 feature_descriptor_orientation_bins=8 closest/next_closest_ratio=0.92 filter maximal_alignment_error=25 minimal_inlier_ratio=0.05 minimal_number_of_inliers=20 expected_transformation=Affine");
 }
 
 function PREPLABELS() {
+run("Remove Slice Labels");
 setSlice(3);
-wait(waittime);
 run("Set Label...", "label=Blue");
-wait(waittime);
 setSlice(2);
-wait(waittime);
 run("Set Label...", "label=Green");
-wait(waittime);
 setSlice(1);
-wait(waittime);
 run("Set Label...", "label=Red");
-wait(waittime);
 }
 
 function pad(n) {
@@ -928,34 +449,18 @@ function pad(n) {
 function convertto16bit() {
 	if (bitDepth == 8){
 		run("16-bit");
-		wait(waittime);
 		run("Multiply...", "value=256.000");
-		wait(waittime);
 		setMinAndMax(0, 65535);
-		wait(waittime);
 		call("ij.ImagePlus.setDefault16bitRange", 16);
-		wait(waittime);
 		setSlice(2);
-		wait(waittime);
 		setMinAndMax(0,65535);
-		wait(waittime);
 		call("ij.ImagePlus.setDefault16bitRange", 16);
-		wait(waittime);
 		setSlice(3);
-		wait(waittime);
 		setMinAndMax(0,65535);
-		wait(waittime);
 		call("ij.ImagePlus.setDefault16bitRange", 16);
-		wait(waittime);
 		} else if (bitDepth == 32){
 		setMinAndMax(0, 65535);
-		wait(waittime);
 		call("ij.ImagePlus.setDefault16bitRange", 16);
-		wait(waittime);
 		run("16-bit");
-		wait(waittime);
 		}	
-		wait(waittime);
-		run("Remove Slice Labels");
-				
-}
+	}
