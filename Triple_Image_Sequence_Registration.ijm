@@ -53,66 +53,105 @@ source1list = getFileList(source1path);
 source2list = getFileList(source2path);
 
 
-//Search for first frame that contains enough detail for a good transform.
+//Search for first frame that contains enough detail for masking.
 setBatchMode(true);
+print("Searching for frame with enough information for masking.");
+var donem = false;//used to terminate loop
+for (k=0; k<targetlist.length && !donem; k++) {
+	targetnamem=targetprefixtext+pad(k+preserveframes);
+	source1namem=source1prefixtext+pad(k+preserveframes);
+	source2namem=source2prefixtext+pad(k+preserveframes);
+	open(targetpath+targetlist[k]);
+	convertto16bit();
+   	rename(targetnamem);
+	open(source1path+source1list[k]);
+	convertto16bit();
+    rename(source1namem);
+	open(source2path+source2list[k]);
+	convertto16bit();
+    rename(source2namem);
+	selectWindow(source1namem);
+	getStatistics(area1m,mean1m);
+	selectWindow(source2namem);
+	getStatistics(area2m,mean2m);
+	selectWindow(targetnamem);
+	getStatistics(area3m,mean3m);
+	selectWindow(source1namem);
+	setLocation(0,0,960,960);
+	if (mean1m > 8000) {
+		setBatchMode("show");
+		Dialog.create("Mask information");
+		Dialog.addMessage("Does the frame have enough information for masking?");
+		Dialog.addMessage("If so, check the checkbox and click OK.");
+		Dialog.addMessage("If not, leave the checkbox alone and click OK to try again.");
+		Dialog.addCheckbox("I'm ready to mask the frames.",false);
+		Dialog.show();
+		maskdetail=Dialog.getCheckbox();
+		if (maskdetail == true) {
+			setBatchMode("hide");
+			selectWindow(source1namem);
+			run("Select None");
+			setBatchMode("show");
+			setTool("rectangle");
+			waitForUser("Source1 Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue to the Target image.");
+			setBatchMode("hide");
+			source1masktype=selectionType;
+			if (source1masktype == 0) {
+				getSelectionBounds(sm1x,sm1y,sm1w,sm1h);
+			} else {
+				print("No source1 mask defined. Moving on.");
+			}
+			selectWindow(source2namem);
+			run("Select None");
+			setBatchMode("show");
+			setTool("rectangle");
+			waitForUser("Source2 Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue to the Target image.");
+			setBatchMode("hide");
+			source2masktype=selectionType;
+			if (source2masktype == 0) {
+				getSelectionBounds(sm2x,sm2y,sm2w,sm2h);
+			} else {
+				print("No source2 mask defined. Moving on.");
+			}
+			selectWindow(targetnamem);
+			run("Select None");
+			setBatchMode("show");
+			setTool("rectangle");
+			waitForUser("Target Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue with registration.");
+			setBatchMode("hide");
+			targetmasktype=selectionType;
+			if (targetmasktype == 0) {
+				getSelectionBounds(tmx,tmy,tmw,tmh);
+			} else {
+				print("No target mask defined. Moving on.");
+			}
+			close(source1namem);
+			close(source2namem);
+			close(targetnamem);
+			donem=true;
+		}
+	}
+	close(source1namem);
+	close(source2namem);
+	close(targetnamem);
+}		
+		
 
 print("Searching for initial set of correspondences");
-var done = false; // used to terminate loop
-for (j=0; j<targetlist.length && !done; j++) {
+var donec = false; // used to terminate loop
+for (j=0; j<targetlist.length && !donec; j++) {
 	targetname=targetprefixtext+pad(j+preserveframes);
 	source1name=source1prefixtext+pad(j+preserveframes);
 	source2name=source2prefixtext+pad(j+preserveframes);
 	open(targetpath+targetlist[j]);
 	convertto16bit();
-   	twidth=1000 + getWidth();
-	theight=1000 + getHeight();
-	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
-	rename(targetname);
+   	rename(targetname);
 	open(source1path+source1list[j]);
 	convertto16bit();
     rename(source1name);
 	open(source2path+source2list[j]);
 	convertto16bit();
     rename(source2name);
-	selectWindow(source1name);
-	run("Select None");
-	setBatchMode("show");
-	setLocation(0,0,960,960);
-	setTool("rectangle");
-	waitForUser("Source1 Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue to the Target image.");
-	setBatchMode("hide");
-	source1masktype=selectionType;
-	if (source1masktype == 0) {
-		getSelectionBounds(sm1x,sm1y,sm1w,sm1h);
-	} else {
-		print("No source1 mask defined. Moving on.");
-	}
-	selectWindow(source2name);
-	run("Select None");
-	setBatchMode("show");
-	setLocation(0,0,960,960);
-	setTool("rectangle");
-	waitForUser("Source2 Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue to the Target image.");
-	setBatchMode("hide");
-	source2masktype=selectionType;
-	if (source2masktype == 0) {
-		getSelectionBounds(sm2x,sm2y,sm2w,sm2h);
-	} else {
-		print("No source2 mask defined. Moving on.");
-	}
-	selectWindow(targetname);
-	run("Select None");
-	setBatchMode("show");
-	setLocation(0,0,960,960);
-	setTool("rectangle");
-	waitForUser("Target Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue with registration.");
-	setBatchMode("hide");
-	targetmasktype=selectionType;
-	if (targetmasktype == 0) {
-		getSelectionBounds(tmx,tmy,tmw,tmh);
-	} else {
-		print("No target mask defined. Moving on.");
-	}
 	selectWindow(source1name);
 	getStatistics(area1,mean1);
 	selectWindow(source2name);
@@ -144,6 +183,10 @@ for (j=0; j<targetlist.length && !done; j++) {
 		fill();
 		run("Select None");
 	}
+	selectWindow(targetname);
+	twidth=1000 + getWidth();
+	theight=1000 + getHeight();
+	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
 	
 	SIFT(source1name,targetname,steps);
 	selectWindow(source1name);
@@ -251,7 +294,7 @@ for (j=0; j<targetlist.length && !done; j++) {
 		setBatchMode("hide");
 		getSelectionBounds(ccx,ccy,ccw,cch);
 		close("Common Cropping");
-		done=true; //terminate the loop
+		donec=true; //terminate the loop
     } else {
 		close(source1name);
 		close(source2name);
@@ -265,7 +308,7 @@ if (bmode == false) {
 
 //Start Registration from beginning of clip using initial transform found above as anchor if needed.
 //Saves last known good set of correspondences and uses them on frames that have none.
-print("Registration loop initialized");
+print("Registration loop initialized.");
 for (i=0; i<targetlist.length; i++) {
 	showProgress(i+1, targetlist.length);
 	targetname1=targetprefixtext+pad(i+preserveframes);
@@ -276,9 +319,6 @@ for (i=0; i<targetlist.length; i++) {
 	print("Import "+targetname1);
 	convertto16bit();
 	rename(targetname1);
-	twidth=1000 + getWidth();
-	theight=1000 + getHeight();
-	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
 	setLocation(0,0,320,240);
 	rename(targetname1);
 	open(source1path+source1list[i]);
@@ -293,150 +333,208 @@ for (i=0; i<targetlist.length; i++) {
     rename(sourcename2);
 	
 	print("Starting Elastic Registration");
-	if (fastreg == false) {
-		selectWindow(targetname1);
-		run("Duplicate...", "title=T1-CLAHE");
-		setLocation(320,0,320,240);
-		run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
-		selectWindow(sourcename1);
-		run("Duplicate...", "title=S1-CLAHE");
-		setLocation(320,240,320,240);
-		run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
-		selectWindow(sourcename2);
-		run("Duplicate...", "title=S2-CLAHE");
-		setLocation(320,480,320,240);
-		run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
-		
-		if (source1masktype == 0) {
-			selectWindow("S1-CLAHE");
-			makeRectangle(sm1x,sm1y,sm1w,sm1h);
-			setColor("black");
-			fill();
-			run("Select None");
-		}
-		if (source2masktype == 0) {
-			selectWindow("S2-CLAHE");
-			makeRectangle(sm2x,sm2y,sm2w,sm2h);
-			setColor("black");
-			fill();
-			run("Select None");
-		}
-		if (targetmasktype == 0) {
-			selectWindow("T1-CLAHE");
-			makeRectangle(tmx,tmy,tmw,tmh);
-			setColor("black");
-			fill();
-			run("Select None");
-		}
-		
-		SIFT("S1-CLAHE","T1-CLAHE",steps);
-		selectWindow("S1-CLAHE");
-		ns1type=selectionType();
+	selectWindow(targetname1);
+	run("Duplicate...", "title=T1-CLAHE");
+	setLocation(320,0,320,240);
+	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
+	selectWindow(sourcename1);
+	run("Duplicate...", "title=S1T-CLAHE");
+	setLocation(320,240,320,240);
+	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
+	selectWindow(sourcename2);
+	run("Duplicate...", "title=S2T-CLAHE");
+	setLocation(320,480,320,240);
+	run("Enhance Local Contrast (CLAHE)", "blocksize=511 histogram=1024 maximum=5 mask=*None* fast_(less_accurate)");
+	
+	if (source1masktype == 0) {
+		selectWindow("S1T-CLAHE");
+		makeRectangle(sm1x,sm1y,sm1w,sm1h);
+		setColor("black");
+		fill();
+		run("Select None");
+	}
+	if (source2masktype == 0) {
+		selectWindow("S2T-CLAHE");
+		makeRectangle(sm2x,sm2y,sm2w,sm2h);
+		setColor("black");
+		fill();
+		run("Select None");
+	}
+	if (targetmasktype == 0) {
 		selectWindow("T1-CLAHE");
-		nttype1=selectionType();
-		if (ns1type & nttype1 == 10) {
-			selectWindow("S1-CLAHE");
-			Roi.getCoordinates(ns1x,ns1y);
-			selectWindow("T1-CLAHE");
-			Roi.getCoordinates(nt1x,nt1y);
-			selectWindow(sourcename1);
-			makeSelection("point hybrid yellow small",ns1x,ns1y);
-			selectWindow(targetname1);
-			makeSelection("point hybrid yellow small",nt1x,nt1y);
-		} else if (ns1x.length > 10) {
-			selectWindow(sourcename1);
-			makeSelection("point hybrid yellow small",ns1x,ns1y);
-			selectWindow(targetname1);
-			makeSelection("point hybrid yellow small",nt1x,nt1y);
-		} else {
-			selectWindow(sourcename1);
-			makeSelection("point hybrid yellow small",s1x,s1y);
-			selectWindow(targetname1);
-			makeSelection("point hybrid yellow small",t1x,t1y);
-		}
-		close("S1-CLAHE");
-	} else {
-			selectWindow(sourcename1);
-			makeSelection("point hybrid yellow small",s1x,s1y);
-			selectWindow(targetname1);
-			makeSelection("point hybrid yellow small",t1x,t1y);
-		}
+		makeRectangle(tmx,tmy,tmw,tmh);
+		setColor("black");
+		fill();
+		run("Select None");
+	}
+	selectWindow("T1-CLAHE");
+	twidth=1000 + getWidth();
+	theight=1000 + getHeight();
+	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
+	selectWindow(targetname1);
+	twidth=1000 + getWidth();
+	theight=1000 + getHeight();
+	run("Canvas Size...", "width="+twidth+" height="+theight+" position=Center zero");
+	selectWindow("S1T-CLAHE");
+	makeSelection("point hybrid yellow small",s1x,s1y);
+	selectWindow("T1-CLAHE");
+	makeSelection("point hybrid yellow small",t1x,t1y);
+	run("Landmark Correspondences", "source_image=S1T-CLAHE template_image=T1-CLAHE transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	rename("S1-CLAHE");
+	close("S1T-CLAHE");
+	SIFT("S1-CLAHE","T1-CLAHE",steps);
+	selectWindow("S1-CLAHE");
+	Roi.getCoordinates(ns1x,ns1y);
+	selectWindow("T1-CLAHE");
+	Roi.getCoordinates(nt1x,nt1y);
+	
+	close("S1-CLAHE");
 	selectWindow(sourcename1);
 	setSlice(1);
+	makeSelection("point hybrid yellow small",s1x,s1y);
 	selectWindow(targetname1);
 	setSlice(1);
+	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	rename("C1T");
+	if (ns1x.length > 10) {
+		selectWindow("C1T");
+		makeSelection("point hybrid yellow small",ns1x,ns1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",nt1x,nt1y);
+	} else {
+		selectWindow("C1T");
+		makeSelection("point hybrid yellow small",s1x,s1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",t1x,t1y);
+	}
+	run("Landmark Correspondences", "source_image=C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C1-"+sourcename1);
 	selectWindow(sourcename1);
 	setSlice(2);
+	makeSelection("point hybrid yellow small",s1x,s1y);
 	selectWindow(targetname1);
 	setSlice(2);
+	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
-	setLocation(640,240,320,240);
+	rename("C2T");
+	if (ns1x.length > 10) {
+		selectWindow("C2T");
+		makeSelection("point hybrid yellow small",ns1x,ns1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",nt1x,nt1y);
+	} else {
+		selectWindow("C2T");
+		makeSelection("point hybrid yellow small",s1x,s1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",t1x,t1y);
+	}
+	run("Landmark Correspondences", "source_image=C2T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	setLocation(320,240,320,240);
 	rename("C2-"+sourcename1);
 	selectWindow(sourcename1);
 	setSlice(3);
+	makeSelection("point hybrid yellow small",s1x,s1y);
 	selectWindow(targetname1);
 	setSlice(3);
+	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
-	setLocation(960,240,320,240);
-	rename("C3-"+sourcename1);
-	
-	if (fastreg == false) {
-		SIFT("S2-CLAHE","T1-CLAHE",steps);
-		selectWindow("S2-CLAHE");
-		ns2type=selectionType();
-		selectWindow("T1-CLAHE");
-		nttype2=selectionType();
-		if (ns2type & nttype2 == 10) {
-			selectWindow("S2-CLAHE");
-			Roi.getCoordinates(ns2x,ns2y);
-			selectWindow("T1-CLAHE");
-			Roi.getCoordinates(nt2x,nt2y);
-			selectWindow(sourcename2);
-			makeSelection("point hybrid yellow small",ns2x,ns2y);
-			selectWindow(targetname1);
-			makeSelection("point hybrid yellow small",nt2x,nt2y);
-		} else if (ns2x.length > 10) {
-			selectWindow(sourcename2);
-			makeSelection("point hybrid yellow small",ns2x,ns2y);
-			selectWindow(targetname1);
-			makeSelection("point hybrid yellow small",nt2x,nt2y);
-		} else {
-			selectWindow(sourcename2);
-			makeSelection("point hybrid yellow small",s2x,s2y);
-			selectWindow(targetname1);
-			makeSelection("point hybrid yellow small",t2x,t2y);
-		}
-		close("S2-CLAHE");
-		close("T1-CLAHE");
+	rename("C3T");
+	if (ns1x.length > 10) {
+		selectWindow("C3T");
+		makeSelection("point hybrid yellow small",ns1x,ns1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",nt1x,nt1y);
 	} else {
-			selectWindow(sourcename2);
-			makeSelection("point hybrid yellow small",s2x,s2y);
-			selectWindow(targetname1);
-			makeSelection("point hybrid yellow small",t2x,t2y);
-		}
+		selectWindow("C3T");
+		makeSelection("point hybrid yellow small",s1x,s1y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",t1x,t1y);
+	}
+	run("Landmark Correspondences", "source_image=C3T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	setLocation(320,240,320,240);
+	rename("C3-"+sourcename1);
+		
+	selectWindow("S2T-CLAHE");
+	makeSelection("point hybrid yellow small",s2x,s2y);
+	selectWindow("T1-CLAHE");
+	makeSelection("point hybrid yellow small",t2x,t2y);
+	run("Landmark Correspondences", "source_image=S2T-CLAHE template_image=T1-CLAHE transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	rename("S2-CLAHE");
+	close("S2T-CLAHE");
+	SIFT("S2-CLAHE","T1-CLAHE",steps);
+	selectWindow("S2-CLAHE");
+	Roi.getCoordinates(ns2x,ns2y);
+	selectWindow("T1-CLAHE");
+	Roi.getCoordinates(nt2x,nt2y);
+	close("S2-CLAHE");
+	close("T1-CLAHE");
 	selectWindow(sourcename2);
 	setSlice(1);
+	makeSelection("point hybrid yellow small",s2x,s2y);
 	selectWindow(targetname1);
 	setSlice(1);
+	makeSelection("point hybrid yellow small",t2x,t2y);
 	run("Landmark Correspondences", "source_image=["+sourcename2+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
-	setLocation(320,480,320,240);
+	rename("C1T");
+	if (ns2x.length > 10) {
+		selectWindow("C1T");
+		makeSelection("point hybrid yellow small",ns2x,ns2y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",nt2x,nt2y);
+	} else {
+		selectWindow("C1T");
+		makeSelection("point hybrid yellow small",s2x,s2y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",t2x,t2y);
+	}
+	run("Landmark Correspondences", "source_image=C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	setLocation(320,240,320,240);
 	rename("C1-"+sourcename2);
 	selectWindow(sourcename2);
 	setSlice(2);
+	makeSelection("point hybrid yellow small",s2x,s2y);
 	selectWindow(targetname1);
 	setSlice(2);
+	makeSelection("point hybrid yellow small",t2x,t2y);
 	run("Landmark Correspondences", "source_image=["+sourcename2+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
-	setLocation(640,480,320,240);
+	rename("C2T");
+	if (ns2x.length > 10) {
+		selectWindow("C2T");
+		makeSelection("point hybrid yellow small",ns2x,ns2y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",nt2x,nt2y);
+	} else {
+		selectWindow("C2T");
+		makeSelection("point hybrid yellow small",s2x,s2y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",t2x,t2y);
+	}
+	run("Landmark Correspondences", "source_image=C2T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	setLocation(320,240,320,240);
 	rename("C2-"+sourcename2);
 	selectWindow(sourcename2);
 	setSlice(3);
+	makeSelection("point hybrid yellow small",s2x,s2y);
 	selectWindow(targetname1);
 	setSlice(3);
+	makeSelection("point hybrid yellow small",t2x,t2y);
 	run("Landmark Correspondences", "source_image=["+sourcename2+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
-	setLocation(960,480,320,240);
+	rename("C3T");
+	if (ns2x.length > 10) {
+		selectWindow("C3T");
+		makeSelection("point hybrid yellow small",ns2x,ns2y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",nt2x,nt2y);
+	} else {
+		selectWindow("C3T");
+		makeSelection("point hybrid yellow small",s2x,s2y);
+		selectWindow(targetname1);
+		makeSelection("point hybrid yellow small",t2x,t2y);
+	}
+	run("Landmark Correspondences", "source_image=C3T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	setLocation(320,240,320,240);
 	rename("C3-"+sourcename2);
 	
 	while (isOpen("C1-" + sourcename2) != 1 && isOpen("C2-" + sourcename2) != 1 && isOpen("C3-" + sourcename2) != 1)
@@ -494,9 +592,6 @@ for (i=0; i<targetlist.length; i++) {
 
 	print("\\Clear");
 	wait(500);
-	if (bmode == true) {
-	setBatchMode(false);
-	}
 	while (nImages()>0) {
 		selectImage(nImages());  
 		wait(100);
