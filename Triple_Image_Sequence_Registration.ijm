@@ -28,15 +28,7 @@ targetprefixtext=Dialog.getString();
 source1prefixtext=Dialog.getString();
 source2prefixtext=Dialog.getString();
 steps=toString(Dialog.getNumber());
-//steps=""+steps;
 preserveframes=Dialog.getNumber();
-//targetpath = getDirectory("Select Target Input Directory");
-//source1path = getDirectory("Select Source 1 Input Directory (these files will be deformed to match the Target Files)");
-//source2path = getDirectory("Select Source 2 Input Directory (these files will be deformed to match the Target Files)");
-
-//outputtargetdir=getDirectory("Select Target Output Directory for image sequence files:");
-//outputsourcedir = getDirectory("Select Source1 Output Directory for image sequence files:");
-//outputsource2dir = getDirectory("Select Source2 Output Directory for image sequence files:");
 File.makeDirectory(outputdir + "Target");
 File.makeDirectory(outputdir + "Source1");
 File.makeDirectory(outputdir + "Source2");
@@ -298,8 +290,6 @@ for (j=0; j<targetlist.length && !donec; j++) {
 	}
 }
 
-}
-
 //Start Registration from beginning of clip using initial transform found above as anchor if needed.
 //Saves last known good set of correspondences and uses them on frames that have none.
 print("Registration loop initialized.");
@@ -390,19 +380,19 @@ for (i=0; i<targetlist.length; i++) {
 	setSlice(1);
 	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
-	rename("C1T");
+	rename("S1C1T");
 	if (ns1x.length > 10) {
-		selectWindow("C1T");
+		selectWindow("S1C1T");
 		makeSelection("point hybrid yellow small",ns1x,ns1y);
 		selectWindow(targetname1);
 		makeSelection("point hybrid yellow small",nt1x,nt1y);
 	} else {
-		selectWindow("C1T");
+		selectWindow("S1C1T");
 		makeSelection("point hybrid yellow small",s1x,s1y);
 		selectWindow(targetname1);
 		makeSelection("point hybrid yellow small",t1x,t1y);
 	}
-	run("Landmark Correspondences", "source_image=C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	run("Landmark Correspondences", "source_image=S1C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C1-"+sourcename1);
 	selectWindow(sourcename1);
@@ -471,19 +461,19 @@ for (i=0; i<targetlist.length; i++) {
 	setSlice(1);
 	makeSelection("point hybrid yellow small",t2x,t2y);
 	run("Landmark Correspondences", "source_image=["+sourcename2+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
-	rename("C1T");
+	rename("S2C1T");
 	if (ns2x.length > 10) {
-		selectWindow("C1T");
+		selectWindow("S2C1T");
 		makeSelection("point hybrid yellow small",ns2x,ns2y);
 		selectWindow(targetname1);
 		makeSelection("point hybrid yellow small",nt2x,nt2y);
 	} else {
-		selectWindow("C1T");
+		selectWindow("S2C1T");
 		makeSelection("point hybrid yellow small",s2x,s2y);
 		selectWindow(targetname1);
 		makeSelection("point hybrid yellow small",t2x,t2y);
 	}
-	run("Landmark Correspondences", "source_image=C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
+	run("Landmark Correspondences", "source_image=S2C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C1-"+sourcename2);
 	selectWindow(sourcename2);
@@ -591,10 +581,7 @@ for (i=0; i<targetlist.length; i++) {
 		wait(100);
 		run("Close");
 	}
-//File.makeDirectory(outputsourcedir + "CM");
-//wait(100);
-//File.makeDirectory(outputsource2dir + "CM");
-//wait(100);
+
 cms1t = File.open(outputdir + source1prefixtext + targetprefixtext + ".txt");
 print(cms1t, "from color_matcher import ColorMatcher" + "\r"
 + "from color_matcher.io_handler import load_img_file, save_img_file, FILE_EXTS" + "\r"
