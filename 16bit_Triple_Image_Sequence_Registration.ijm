@@ -368,9 +368,15 @@ for (i=0; i<targetlist.length; i++) {
 	close("S1T-CLAHE");
 	SIFT("S1-CLAHE","T1-CLAHE",steps);
 	selectWindow("S1-CLAHE");
+	s1typen=selectionType();
+	if (s1typen == 10) {
 	Roi.getCoordinates(ns1x,ns1y);
+	}
 	selectWindow("T1-CLAHE");
+	t1typen=selectionType();
+	if (t1typen == 10) {
 	Roi.getCoordinates(nt1x,nt1y);
+	}
 	
 	close("S1-CLAHE");
 	selectWindow(sourcename1);
@@ -381,17 +387,10 @@ for (i=0; i<targetlist.length; i++) {
 	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	rename("S1C1T");
-	if (ns1x.length > 10) {
-		selectWindow("S1C1T");
-		makeSelection("point hybrid yellow small",ns1x,ns1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",nt1x,nt1y);
-	} else {
-		selectWindow("S1C1T");
-		makeSelection("point hybrid yellow small",s1x,s1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",t1x,t1y);
-	}
+	selectWindow("S1C1T");
+	makeSelection("point hybrid yellow small",ns1x,ns1y);
+	selectWindow(targetname1);
+	makeSelection("point hybrid yellow small",nt1x,nt1y);
 	run("Landmark Correspondences", "source_image=S1C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C1-"+sourcename1);
@@ -403,17 +402,10 @@ for (i=0; i<targetlist.length; i++) {
 	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	rename("C2T");
-	if (ns1x.length > 10) {
-		selectWindow("C2T");
-		makeSelection("point hybrid yellow small",ns1x,ns1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",nt1x,nt1y);
-	} else {
-		selectWindow("C2T");
-		makeSelection("point hybrid yellow small",s1x,s1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",t1x,t1y);
-	}
+	selectWindow("C2T");
+	makeSelection("point hybrid yellow small",ns1x,ns1y);
+	selectWindow(targetname1);
+	makeSelection("point hybrid yellow small",nt1x,nt1y);
 	run("Landmark Correspondences", "source_image=C2T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C2-"+sourcename1);
@@ -425,17 +417,10 @@ for (i=0; i<targetlist.length; i++) {
 	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	rename("C3T");
-	if (ns1x.length > 10) {
-		selectWindow("C3T");
-		makeSelection("point hybrid yellow small",ns1x,ns1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",nt1x,nt1y);
-	} else {
-		selectWindow("C3T");
-		makeSelection("point hybrid yellow small",s1x,s1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",t1x,t1y);
-	}
+	selectWindow("C3T");
+	makeSelection("point hybrid yellow small",ns1x,ns1y);
+	selectWindow(targetname1);
+	makeSelection("point hybrid yellow small",nt1x,nt1y);
 	run("Landmark Correspondences", "source_image=C3T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C3-"+sourcename1);
@@ -449,9 +434,16 @@ for (i=0; i<targetlist.length; i++) {
 	close("S2T-CLAHE");
 	SIFT("S2-CLAHE","T1-CLAHE",steps);
 	selectWindow("S2-CLAHE");
+	s2typen=selectionType();
+	if (s2typen == 10) {
 	Roi.getCoordinates(ns2x,ns2y);
+	}
 	selectWindow("T1-CLAHE");
+	t2typen=selectionType();
+	if (t2typen == 10) {
 	Roi.getCoordinates(nt2x,nt2y);
+	}
+		
 	close("S2-CLAHE");
 	close("T1-CLAHE");
 	selectWindow(sourcename2);
@@ -462,17 +454,10 @@ for (i=0; i<targetlist.length; i++) {
 	makeSelection("point hybrid yellow small",t2x,t2y);
 	run("Landmark Correspondences", "source_image=["+sourcename2+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	rename("S2C1T");
-	if (ns2x.length > 10) {
-		selectWindow("S2C1T");
-		makeSelection("point hybrid yellow small",ns2x,ns2y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",nt2x,nt2y);
-	} else {
-		selectWindow("S2C1T");
-		makeSelection("point hybrid yellow small",s2x,s2y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",t2x,t2y);
-	}
+	selectWindow("S2C1T");
+	makeSelection("point hybrid yellow small",ns2x,ns2y);
+	selectWindow(targetname1);
+	makeSelection("point hybrid yellow small",nt2x,nt2y);
 	run("Landmark Correspondences", "source_image=S2C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C1-"+sourcename2);
@@ -484,17 +469,10 @@ for (i=0; i<targetlist.length; i++) {
 	makeSelection("point hybrid yellow small",t2x,t2y);
 	run("Landmark Correspondences", "source_image=["+sourcename2+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	rename("C2T");
-	if (ns2x.length > 10) {
-		selectWindow("C2T");
-		makeSelection("point hybrid yellow small",ns2x,ns2y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",nt2x,nt2y);
-	} else {
-		selectWindow("C2T");
-		makeSelection("point hybrid yellow small",s2x,s2y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",t2x,t2y);
-	}
+	selectWindow("C2T");
+	makeSelection("point hybrid yellow small",ns2x,ns2y);
+	selectWindow(targetname1);
+	makeSelection("point hybrid yellow small",nt2x,nt2y);
 	run("Landmark Correspondences", "source_image=C2T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C2-"+sourcename2);
@@ -506,17 +484,10 @@ for (i=0; i<targetlist.length; i++) {
 	makeSelection("point hybrid yellow small",t2x,t2y);
 	run("Landmark Correspondences", "source_image=["+sourcename2+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	rename("C3T");
-	if (ns2x.length > 10) {
-		selectWindow("C3T");
-		makeSelection("point hybrid yellow small",ns2x,ns2y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",nt2x,nt2y);
-	} else {
-		selectWindow("C3T");
-		makeSelection("point hybrid yellow small",s2x,s2y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",t2x,t2y);
-	}
+	selectWindow("C3T");
+	makeSelection("point hybrid yellow small",ns2x,ns2y);
+	selectWindow(targetname1);
+	makeSelection("point hybrid yellow small",nt2x,nt2y);
 	run("Landmark Correspondences", "source_image=C3T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C3-"+sourcename2);
