@@ -1,4 +1,4 @@
-//Triple Image Sequence Registration
+//Dual Image Sequence Registration
 //16bit output
 
 Dialog.create("Register 16bit Image Sequences");
@@ -63,40 +63,40 @@ for (k=0; k<targetlist.length && !donem; k++) {
 		Dialog.show();
 		maskdetail=Dialog.getCheckbox();
 		if (maskdetail == true) {
-			setBatchMode("hide");
-			selectWindow(source1namem);
 			run("Select None");
-			setBatchMode("show");
 			setTool("rectangle");
 			waitForUser("Source1 Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue to the Target image.");
 			setBatchMode("hide");
 			source1masktype=selectionType;
-			if (source1masktype == 0) {
-				getSelectionBounds(sm1x,sm1y,sm1w,sm1h);
-			} else {
-				print("No source1 mask defined. Moving on.");
-			}
-			selectWindow(targetnamem);
-			run("Select None");
-			setBatchMode("show");
-			setTool("rectangle");
-			waitForUser("Target Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue with registration.");
-			setBatchMode("hide");
-			targetmasktype=selectionType;
-			if (targetmasktype == 0) {
-				getSelectionBounds(tmx,tmy,tmw,tmh);
-			} else {
-				print("No target mask defined. Moving on.");
-			}
-			close(source1namem);
-			close(targetnamem);
-			donem=true;
-		}
+			if (source1masktype == 0 & maskdetail == true) {
+				selectWindow(source1namem);
+				if (source1masktype == 0) {
+					getSelectionBounds(sm1x,sm1y,sm1w,sm1h);
+					} else {
+					print("No source mask defined. Moving on.");
+					}
+					selectWindow(targetnamem);
+					run("Select None");
+					setBatchMode("show");
+					setTool("rectangle");
+					waitForUser("Target Mask","Draw a rectangle around the area that should not be feature matched.\nIf no mask is desired then press OK to continue with registration.");
+					setBatchMode("hide");
+					targetmasktype=selectionType;
+					if (targetmasktype == 0) {
+					getSelectionBounds(tmx,tmy,tmw,tmh);
+					} else {
+					print("No target mask defined. Moving on.");
+					}
+					close(source1namem);
+					close(targetnamem);
+					donem=true;
+			} 
+		} 
 	}
-	close(source1namem);
-	close(targetnamem);
-}		
-		
+close(source1namem);
+close(targetnamem);	
+}
+	
 
 print("Searching for initial set of correspondences");
 var donec = false; // used to terminate loop
@@ -264,9 +264,15 @@ for (i=0; i<targetlist.length; i++) {
 	close("S1T-CLAHE");
 	SIFT("S1-CLAHE","T1-CLAHE",steps);
 	selectWindow("S1-CLAHE");
+	s1typen=selectionType();
+	if (s1typen == 10) {
 	Roi.getCoordinates(ns1x,ns1y);
+	}
 	selectWindow("T1-CLAHE");
+	t1typen=selectionType();
+	if (t1typen == 10) {
 	Roi.getCoordinates(nt1x,nt1y);
+	}
 	
 	close("S1-CLAHE");
 	selectWindow(sourcename1);
@@ -277,17 +283,10 @@ for (i=0; i<targetlist.length; i++) {
 	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	rename("C1T");
-	if (ns1x.length > 10) {
-		selectWindow("C1T");
-		makeSelection("point hybrid yellow small",ns1x,ns1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",nt1x,nt1y);
-	} else {
-		selectWindow("C1T");
-		makeSelection("point hybrid yellow small",s1x,s1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",t1x,t1y);
-	}
+	selectWindow("C1T");
+	makeSelection("point hybrid yellow small",ns1x,ns1y);
+	selectWindow(targetname1);
+	makeSelection("point hybrid yellow small",nt1x,nt1y);
 	run("Landmark Correspondences", "source_image=C1T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C1-"+sourcename1);
@@ -299,17 +298,10 @@ for (i=0; i<targetlist.length; i++) {
 	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	rename("C2T");
-	if (ns1x.length > 10) {
-		selectWindow("C2T");
-		makeSelection("point hybrid yellow small",ns1x,ns1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",nt1x,nt1y);
-	} else {
-		selectWindow("C2T");
-		makeSelection("point hybrid yellow small",s1x,s1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",t1x,t1y);
-	}
+	selectWindow("C2T");
+	makeSelection("point hybrid yellow small",ns1x,ns1y);
+	selectWindow(targetname1);
+	makeSelection("point hybrid yellow small",nt1x,nt1y);
 	run("Landmark Correspondences", "source_image=C2T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C2-"+sourcename1);
@@ -321,17 +313,10 @@ for (i=0; i<targetlist.length; i++) {
 	makeSelection("point hybrid yellow small",t1x,t1y);
 	run("Landmark Correspondences", "source_image=["+sourcename1+"] template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	rename("C3T");
-	if (ns1x.length > 10) {
-		selectWindow("C3T");
-		makeSelection("point hybrid yellow small",ns1x,ns1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",nt1x,nt1y);
-	} else {
-		selectWindow("C3T");
-		makeSelection("point hybrid yellow small",s1x,s1y);
-		selectWindow(targetname1);
-		makeSelection("point hybrid yellow small",t1x,t1y);
-	}
+	selectWindow("C3T");
+	makeSelection("point hybrid yellow small",ns1x,ns1y);
+	selectWindow(targetname1);
+	makeSelection("point hybrid yellow small",nt1x,nt1y);
 	run("Landmark Correspondences", "source_image=C3T template_image=["+targetname1+"] transformation_method=[Least Squares] alpha=1 mesh_resolution=32 transformation_class=Affine interpolate");
 	setLocation(320,240,320,240);
 	rename("C3-"+sourcename1);
